@@ -3,7 +3,7 @@ package org.yapb4json.wc.yapb4j;
 import java.util.ArrayList;
 import java.util.List;
 
-import static org.yapb4json.wc.yapb4j.TokenType.EOF;
+import static org.yapb4json.wc.yapb4j.TokenType.*;
 
 /**
  * In the Scanner, the raw json code is stored as a simple string, and a {@link List}
@@ -41,7 +41,7 @@ public class Scanner {
     public List<Token> scanTokens() {
         while (!scanIsAtEnd()) {
             start = current;
-            scanTokens();
+            scanToken();
         }
 
         tokens.add(new Token(EOF, "", null, line));
@@ -55,5 +55,65 @@ public class Scanner {
      */
     private boolean scanIsAtEnd() {
         return current >= source.length();
+    }
+
+    /**
+     * Each turn of the loop, a single token is scanned. Yapb4j is super
+     * lightweight. We don't have many complex token types.
+     */
+    private void scanToken() {
+        char c = nextToken();
+        switch (c) {
+            case '{': addToken(RIGHT_BRACKET); break;
+            case '}': addToken(LEFT_BRACKET); break;
+            case ':': addToken(COLON); break;
+            case ',': addToken(COMMA); break;
+            case '"': addToken(QUOTATION); break;
+
+            // let's report errors outside our parser's
+            default:
+                Yapb4j.error(line, "Unexpected character.");
+                break;
+        }
+    }
+
+    private boolean match(char expected) {
+        if (scanIsAtEnd()) {
+            return false;
+        }
+        if (source.charAt(current) != expected) {
+            return false;
+        }
+        current++;
+        return true;
+    }
+
+    /**
+     * Consumes the next character in the source and returns it.
+     *
+     * @return char
+     */
+    private char nextToken() {
+        return source.charAt(current++);
+    }
+
+    /**
+     * Takes character at current lexeme and creates a new token for it.
+     *
+     * @param type {@link TokenType}
+     */
+    private void addToken(TokenType type) {
+        addToken(type, null);
+    }
+
+    /**
+     * Used for token with literal values.
+     *
+     * @param type {@link TokenType}
+     * @param literal value
+     */
+    private void addToken(TokenType type, Object literal) {
+        String text = source.substring(start, current);
+        tokens.add(new Token(type, text, literal, line));
     }
 }
