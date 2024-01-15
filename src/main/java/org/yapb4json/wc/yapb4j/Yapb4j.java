@@ -9,7 +9,7 @@ import java.nio.file.Paths;
 import java.util.List;
 
 /**
- * fast scanner that can take any string of Lox source code and produce the
+ * Fast scanner that can take any string of json source code and produce the
  * tokens that we’ll feed into the parser
  */
 public class Yapb4j {
