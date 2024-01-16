@@ -40,6 +40,13 @@ public class Scanner {
      */
     private static int line = 1;
 
+    /**
+     * Tracks the colon between a key/value pair. The colon can be reset to false
+     * once a comma is parsed. A parsed comma tells the scanner to prepare for
+     * more key/values.
+     */
+    private static boolean colonSet = false;
+
     public Scanner(String source) {
         this.source = source;
     }
@@ -74,6 +81,9 @@ public class Scanner {
      * lightweight. We don't have many complex token types.
      */
     private void scanToken() {
+        if (start == 0) {
+            checkStartToken();
+        }
         char c = nextToken();
         switch (c) {
             case '{':
@@ -102,6 +112,11 @@ public class Scanner {
             // dealing with string literals
             case '"':
                 stringLiteral();
+                if (!colonSet) {
+                    peekForPreColon();
+                } else {
+                    peekForPostColon();
+                }
                 break;
 
             // let's report errors outside our parser's
@@ -109,10 +124,27 @@ public class Scanner {
                 if (isDigit(c)) {
                     numberLiteral();
                 } else {
-                    Yapb4j.error(line, "Unexpected character.");
+                    Yapb4j.error(line, String.format("Unexpected character '%c'", c));
+                    System.exit(1);
                 }
                 break;
         }
+    }
+
+    /**
+     * Validate starting character in json source. Prints error to STDOUT
+     * and exits if the incorrect starting structure is parsed.
+     */
+    private void checkStartToken() {
+        char c = source.charAt(0);
+        if (!(c == '{')) {
+            Yapb4j.error(line, String.format("Expected character '{', but got '%c'.", c));
+            System.exit(1);
+        }
+    }
+
+    private void isEndOrContinue() {
+
     }
 
     /**
@@ -151,8 +183,8 @@ public class Scanner {
         while (peek() != '"' && !scanIsAtEnd()) {
             if (peek() == '\n') {
                 line++;
-                nextToken();
             }
+            nextToken();
         }
 
         if (scanIsAtEnd()) {
@@ -166,17 +198,6 @@ public class Scanner {
         addToken(STRING, value);
     }
 
-    private boolean match(char expected) {
-        if (scanIsAtEnd()) {
-            return false;
-        }
-        if (source.charAt(current) != expected) {
-            return false;
-        }
-        current++;
-        return true;
-    }
-
     /**
      * Similar to {@link Scanner#nextToken()} but doesn't consume the character.
      * This is considered a look-a-head.
@@ -188,6 +209,37 @@ public class Scanner {
             return '\0';
         }
         return source.charAt(current);
+    }
+
+    private void peekForColon(char c) {
+        while (peek() != c && !scanIsAtEnd()) {
+            if (peek() == '\n') {
+                line++;
+            }
+            nextToken();
+        }
+    }
+
+    private void peekForPreColon() {
+        peekForColon(':');
+        if (scanIsAtEnd()) {
+            Yapb4j.error(line, "Invalid json. Expected ':'.");
+            System.exit(1);
+        }
+
+        // set colon for colon lookout - can reset when comma is parsed
+        // and there are more values
+        colonSet = true;
+    }
+
+    //TODO: peek for post colon character before parsing remaining values
+    // or end EOF character
+    private  void peekForPostColon() {
+        peekForColon('"');
+        if (scanIsAtEnd()) {
+            Yapb4j.error(line, "Invalid json. Expected '\"'. ");
+            System.exit(1);
+        }
     }
 
     /**
@@ -211,6 +263,15 @@ public class Scanner {
      */
     private char nextToken() {
         return source.charAt(current++);
+    }
+
+    /**
+     * Reports the current token.
+     *
+     * @return char
+     */
+    private char currentToken() {
+        return source.charAt(current);
     }
 
     /**
