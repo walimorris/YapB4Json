@@ -45,7 +45,9 @@ public class Scanner {
      * once a comma is parsed. A parsed comma tells the scanner to prepare for
      * more key/values.
      */
-    private static boolean colonSet = false;
+    private static boolean preColonSet = false;
+
+    private static boolean postColonSet = false;
 
     public Scanner(String source) {
         this.source = source;
@@ -91,6 +93,13 @@ public class Scanner {
                 break;
             case '}':
                 addToken(LEFT_BRACKET);
+                // closing bracket should be EOD. No character should fall after
+                // TODO: sometimes users may have trailing whitespace in the json
+                // TODO: this should be trimmed because it is otherwise valid
+                if (peek() != '\0') {
+                    Yapb4j.error(line, "Invalid json. Expected EOF.");
+                    System.exit(1);
+                }
                 break;
             case ':':
                 addToken(COLON);
@@ -112,9 +121,9 @@ public class Scanner {
             // dealing with string literals
             case '"':
                 stringLiteral();
-                if (!colonSet) {
+                if (!preColonSet) {
                     peekForPreColon();
-                } else {
+                } else if (!postColonSet) {
                     peekForPostColon();
                 }
                 break;
@@ -213,6 +222,7 @@ public class Scanner {
 
     private void peekForColon(char c) {
         while (peek() != c && !scanIsAtEnd()) {
+            System.out.println(peek());
             if (peek() == '\n') {
                 line++;
             }
@@ -229,16 +239,51 @@ public class Scanner {
 
         // set colon for colon lookout - can reset when comma is parsed
         // and there are more values
-        colonSet = true;
+        preColonSet = true;
     }
 
-    //TODO: peek for post colon character before parsing remaining values
-    // or end EOF character
-    private  void peekForPostColon() {
-        peekForColon('"');
+    private void peekForPostColon() {
+        peekForContinueToken();
         if (scanIsAtEnd()) {
-            Yapb4j.error(line, "Invalid json. Expected '\"'. ");
+            Yapb4j.error(line, "Invalid json. Expected ','.");
             System.exit(1);
+        } else {
+            if (currentToken() != '}') {
+                peekForStringLiteral();
+                if (scanIsAtEnd()) {
+                    Yapb4j.error(line, "Invalid json. Expected '\"'");
+                    System.exit(1);
+                }
+                System.out.println("done peeking for string literal");
+                preColonSet = false;
+                postColonSet = false;
+            }
+        }
+    }
+
+    private void peekForStringLiteral() {
+        char peek = peek();
+        while (peek != '"' && !scanIsAtEnd()) {
+            peek = peek();
+            if (peek() == '\n') {
+                line++;
+            }
+            nextToken();
+        }
+    }
+
+    private void peekForContinueToken() {
+        System.out.println("checking for continue or close");
+        char peek = peek();
+        while (peek != ',' && !scanIsAtEnd()) {
+            if (peek == '}') {
+                break;
+            }
+            System.out.println(peek());
+            if (peek() == '\n') {
+                line++;
+            }
+            nextToken();
         }
     }
 
